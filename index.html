@@ -1,0 +1,2860 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#020617">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Nexus Portal - Modern HTML Viewer</title>
+    
+    <!-- Preload Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="apple-touch-icon" href="./icons/icon-192x192.png">
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dim: rgba(99, 102, 241, 0.2);
+            --accent: #10b981;
+            --accent-dim: rgba(16, 185, 129, 0.2);
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg-dark: #020617;
+            --bg-card: rgba(15, 23, 42, 0.95);
+            --sidebar-bg: rgba(7, 10, 25, 0.98);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #ffffff;
+            --text-dim: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        /* Light Theme */
+        :root.light-theme {
+            --bg-dark: #f1f5f9;
+            --bg-card: rgba(255, 255, 255, 0.95);
+            --sidebar-bg: rgba(248, 250, 252, 0.98);
+            --glass-border: rgba(0, 0, 0, 0.1);
+            --text-primary: #0f172a;
+            --text-dim: #475569;
+            --text-muted: #64748b;
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body, html {
+            height: 100%;
+            background-color: var(--bg-dark);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow: hidden;
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Disable text selection on UI elements only */
+        .no-select {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .light-theme #bg-canvas {
+            opacity: 0.3;
+        }
+
+        /* --- APP MODE (Hide fullscreen button in APK) --- */
+        body.app-mode #nav .icon-btn[data-action="fullscreen"] {
+            display: none !important;
+        }
+
+        /* --- SPLASH SCREEN --- */
+        #splash-screen {
+            position: fixed;
+            inset: 0;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            opacity: 1;
+            visibility: visible;
+            transition: opacity 0.6s ease, visibility 0.6s;
+        }
+
+        #splash-screen.fade-out {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        .loader-container {
+            width: 220px;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.05);
+            margin-top: 25px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .loader-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--primary);
+            box-shadow: 0 0 15px var(--primary);
+            transition: width 0.1s ease;
+        }
+
+        .loading-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: var(--primary);
+            margin-top: 12px;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            font-weight: bold;
+        }
+
+        /* --- SECURITY ALERT --- */
+        #security-alert {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 30000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        .alert-box {
+            text-align: center;
+            border: 1px solid var(--danger);
+            padding: 20px 40px;
+            background: rgba(10, 0, 0, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+            animation: alertSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .alert-title {
+            font-size: 18px;
+            font-weight: 900;
+            color: var(--danger);
+            letter-spacing: 3px;
+            margin: 0;
+        }
+
+        @keyframes alertSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* --- NAVIGATION --- */
+        #nav {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 5000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            transition: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 1;
+        }
+
+        #nav.hidden {
+            opacity: 0;
+            transform: scale(0.9) translateX(-20px);
+        }
+
+        .icon-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: var(--bg-card);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            cursor: pointer;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 18px;
+        }
+
+        .icon-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .icon-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* --- EDGE SENSORS --- */
+        .sensor-edge {
+            position: fixed;
+            z-index: 4500;
+            background: transparent;
+        }
+
+        #sensor-top {
+            top: 0;
+            left: 0;
+            width: 70%;
+            height: 60px;
+        }
+
+        #sensor-left {
+            top: 0;
+            left: 0;
+            width: 85px;
+            height: 20%;
+        }
+
+        /* --- OVERLAY --- */
+        #overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 5500;
+            display: none;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+
+        #overlay.active {
+            display: block;
+        }
+
+        /* --- SIDEBAR --- */
+        #sidebar {
+            position: fixed;
+            left: -320px;
+            top: 0;
+            width: 320px;
+            max-width: 90vw;
+            height: 100%;
+            background: var(--sidebar-bg);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            z-index: 6000;
+            transition: left 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            color: var(--text-primary);
+            border-right: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        #sidebar.active {
+            left: 0 !important;
+        }
+
+        .sidebar-header {
+            padding: 40px 25px 15px 25px;
+            background: linear-gradient(to bottom, var(--primary-dim), transparent);
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h3 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: 2px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-header h3:hover {
+            color: var(--primary);
+        }
+
+        .sidebar-header h3:active {
+            transform: scale(0.98);
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        #mode-text {
+            font-size: 10px;
+            color: var(--primary);
+            margin: 0;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .header-btn {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            opacity: 0.8;
+            transition: opacity 0.2s, transform 0.2s;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .header-btn:hover {
+            opacity: 1;
+        }
+
+        .header-btn:active {
+            transform: scale(0.9);
+        }
+
+        /* --- SEARCH BOX --- */
+        .search-container {
+            padding: 10px 25px;
+            flex-shrink: 0;
+        }
+
+        #search-input {
+            width: 100%;
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        #search-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 10px var(--primary-dim);
+        }
+
+        #search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* --- FILE LIST --- */
+        .file-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 25px 10px 25px;
+            flex-shrink: 0;
+        }
+
+        .file-list-title {
+            font-size: 10px;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+        }
+
+        .file-count {
+            font-size: 9px;
+            color: var(--accent);
+            background: var(--accent-dim);
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-weight: bold;
+        }
+
+        .file-list {
+            list-style: none;
+            padding: 0 15px;
+            margin: 0;
+            flex-grow: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .file-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .file-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .file-list::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 4px;
+        }
+
+        .file-item {
+            padding: 12px 15px;
+            background: rgba(255, 255, 255, 0.03);
+            margin-bottom: 8px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .file-item:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: var(--primary);
+            transform: translateX(3px);
+        }
+
+        .file-item.dragging {
+            opacity: 0.4;
+            border: 1px dashed var(--primary);
+            background: var(--primary-dim);
+        }
+
+        .file-item.drag-over {
+            border-top: 2px solid var(--accent);
+            background: var(--accent-dim);
+            transform: scale(1.02);
+        }
+
+        .file-item.hidden {
+            display: none;
+        }
+
+        .accent-line {
+            width: 3px;
+            height: 100%;
+            min-height: 20px;
+            background: var(--primary);
+            border-radius: 10px;
+            margin-right: 12px;
+            flex-shrink: 0;
+        }
+
+        .file-icon {
+            margin-right: 8px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .file-info {
+            flex-grow: 1;
+            min-width: 0;
+            cursor: pointer;
+        }
+
+        .file-name {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-size: 13px;
+            display: block;
+        }
+
+        .file-size {
+            font-size: 9px;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 5px;
+            flex-shrink: 0;
+        }
+
+        .action-btn {
+            padding: 5px 8px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.6;
+            transition: all 0.2s;
+            border-radius: 4px;
+        }
+
+        .action-btn:hover {
+            opacity: 1;
+        }
+
+        .action-btn.edit {
+            color: var(--primary);
+        }
+
+        .action-btn.delete {
+            color: var(--danger);
+        }
+
+        .action-btn.edit:hover {
+            background: var(--primary-dim);
+        }
+
+        .action-btn.delete:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        /* --- EDITOR UI --- */
+        #editor-ui {
+            padding: 0 25px;
+            display: none;
+            flex-shrink: 0;
+        }
+
+        #editor-ui.active {
+            display: block;
+        }
+
+        .upload-btn {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px dashed var(--primary);
+            background: var(--primary-dim);
+            color: var(--primary);
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+
+        .upload-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-style: solid;
+        }
+
+        /* --- SIDEBAR FOOTER --- */
+        .sidebar-footer {
+            padding: 15px 25px 25px;
+            border-top: 1px solid var(--glass-border);
+            flex-shrink: 0;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: none;
+            background: var(--primary);
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 10px;
+            transition: all 0.3s;
+            font-size: 11px;
+            letter-spacing: 1px;
+        }
+
+        .btn-action:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-action.secondary {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+        }
+
+        .btn-action.danger {
+            background: transparent;
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+
+        #system-status {
+            padding: 15px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: var(--accent);
+            opacity: 0.8;
+        }
+
+        .copyright {
+            font-size: 9px;
+            color: var(--text-dim);
+            text-align: center;
+            letter-spacing: 2px;
+            font-weight: bold;
+            cursor: help;
+            padding-top: 10px;
+            transition: all 0.2s;
+        }
+
+        .copyright:active {
+            color: var(--primary);
+            text-shadow: 0 0 5px var(--primary);
+        }
+
+        /* --- VIEW CONTAINER --- */
+        #view-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        #view {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #fff;
+            display: none;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* --- WELCOME SCREEN --- */
+        #welcome-screen {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .nexus-logo {
+            font-size: clamp(2.5rem, 10vw, 4rem);
+            font-weight: 900;
+            letter-spacing: -2px;
+            background: linear-gradient(45deg, var(--primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.3));
+            animation: pulse 3s infinite ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% {
+                opacity: 0.8;
+                transform: scale(0.98);
+            }
+        }
+
+        .nexus-tag {
+            color: var(--text-dim);
+            font-size: 11px;
+            letter-spacing: 5px;
+            margin-top: -10px;
+            margin-bottom: 30px;
+            text-transform: uppercase;
+        }
+
+        .status-box {
+            width: 280px;
+            max-width: 90%;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--accent);
+            border: 1px solid var(--accent-dim);
+            padding: 15px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            text-align: left;
+            opacity: 0.7;
+        }
+
+        .status-box div {
+            margin-bottom: 5px;
+        }
+
+        /* --- SOURCE VIEWER MODAL --- */
+        .nexus-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 9999;
+            display: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #source-viewer {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 500px;
+            height: 80vh;
+            max-height: 600px;
+            background: var(--bg-card);
+            z-index: 10000;
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 20px;
+            padding: 18px;
+            flex-direction: column;
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -45%) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+
+        .viewer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 12px;
+            flex-shrink: 0;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .viewer-title {
+            color: var(--primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
+
+        .viewer-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .modal-btn {
+            font-size: 9px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: bold;
+            transition: all 0.2s;
+            border: 1px solid;
+        }
+
+        .modal-btn.copy {
+            background: var(--primary-dim);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .modal-btn.save {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: var(--accent);
+            display: none;
+        }
+
+        .modal-btn.undo,
+        .modal-btn.redo {
+            background: transparent;
+            border-color: var(--text-muted);
+            color: var(--text-muted);
+            padding: 6px 8px;
+        }
+
+        .modal-btn.close {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .modal-btn:hover {
+            transform: translateY(-1px);
+        }
+
+        .modal-btn.copy:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .modal-btn.save:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .modal-btn.close:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* --- CODE EDITOR --- */
+        #pre-container {
+            display: flex;
+            flex-direction: column;
+            flex-grow: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        #pre-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #pre-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        #pre-container::-webkit-scrollbar-thumb {
+            background: var(--glass-border);
+            border-radius: 6px;
+        }
+
+        #source-content {
+            display: block;
+            width: 100%;
+            min-height: 100%;
+            padding: 15px;
+            color: #7dd3fc;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            line-height: 1.7;
+            outline: none;
+            cursor: text;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            word-break: break-all;
+            box-sizing: border-box;
+            transition: border-left 0.3s ease;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
+        #source-content:focus {
+            border-left: 3px solid var(--primary);
+            padding-left: 12px;
+        }
+
+        #source-content:empty::before {
+            content: "> AWAITING_INPUT...";
+            color: rgba(125, 211, 252, 0.4);
+            font-size: 10px;
+            letter-spacing: 1px;
+            pointer-events: none;
+            animation: terminalBlink 2s infinite;
+        }
+
+        @keyframes terminalBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .unsaved-indicator {
+            display: none;
+            width: 8px;
+            height: 8px;
+            background: var(--warning);
+            border-radius: 50%;
+            margin-left: 8px;
+            animation: pulse 1s infinite;
+        }
+
+        .unsaved-indicator.active {
+            display: inline-block;
+        }
+
+        /* --- TOAST NOTIFICATION --- */
+        #nexus-toast {
+            display: none;
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50000;
+            pointer-events: none;
+        }
+
+        .toast-inner {
+            background: var(--bg-card);
+            border: 1px solid var(--accent);
+            padding: 12px 25px;
+            border-radius: 12px;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .toast-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        #toast-msg {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--accent);
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
+
+        /* --- UNIVERSAL MODAL STYLES --- */
+        #rename-modal,
+        #confirm-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 45000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 20px;
+        }
+
+        .modal-box {
+            width: 100%;
+            max-width: 320px;
+            background: var(--bg-card);
+            border: 1px solid var(--primary);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+            animation: modalSlideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+
+        .modal-title {
+            color: var(--primary);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .modal-message {
+            color: var(--text-dim);
+            font-size: 12px;
+            text-align: center;
+            margin-bottom: 25px;
+            line-height: 1.6;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .modal-input {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.4);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            margin-bottom: 20px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .modal-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .modal-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .modal-action-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid;
+        }
+
+        .modal-action-btn.cancel {
+            background: transparent;
+            border-color: var(--text-dim);
+            color: var(--text-dim);
+        }
+
+        .modal-action-btn.cancel:hover {
+            background: var(--text-dim);
+            color: var(--bg-dark);
+        }
+
+        .modal-action-btn.confirm {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .modal-action-btn.confirm:hover {
+            background: #4f46e5;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+        }
+
+        .modal-action-btn.danger {
+            background: #450a0a;
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .modal-action-btn.danger:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        /* --- DEV MODAL --- */
+        #dev-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 35000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            cursor: pointer;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .dev-modal-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-height: 90vh;
+        }
+
+        .dev-box {
+            border: 2px solid var(--accent);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.2);
+            width: 100%;
+            max-width: 320px;
+            background: #000;
+            border-radius: 16px;
+            padding: 25px;
+            cursor: default;
+        }
+
+        .dev-title {
+            color: var(--accent);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .dev-identity {
+            color: var(--accent);
+            font-size: 9px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid var(--accent-dim);
+            padding-bottom: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .dev-content {
+            max-height: 300px;
+            overflow-y: auto;
+            padding-right: 8px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .dev-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .dev-content::-webkit-scrollbar-thumb {
+            background: var(--accent-dim);
+            border-radius: 4px;
+        }
+
+        .dev-content p {
+            color: #00ffff;
+            font-size: 11px;
+            line-height: 1.6;
+            margin-bottom: 12px;
+        }
+
+        .dev-content h2 {
+            color: #00ffff;
+            font-size: 16px;
+            margin: 15px 0 10px;
+        }
+
+        .dev-warning {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 3px solid var(--danger);
+            padding: 10px;
+            margin: 12px 0;
+            font-size: 10px;
+            color: var(--danger);
+        }
+
+        .dev-tip {
+            color: var(--warning) !important;
+            font-style: italic;
+        }
+
+        .dev-dismiss {
+            margin-top: 20px;
+            width: 100%;
+            background: var(--accent-dim);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-size: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .dev-dismiss:hover {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .footer-link {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            text-decoration: none;
+            font-size: 9px;
+            font-weight: bold;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            transition: all 0.2s;
+            border: 1px solid;
+        }
+
+        .btn-trakteer {
+            border-color: #be1e2d;
+            color: #be1e2d;
+        }
+
+        .btn-trakteer:hover {
+            background: #be1e2d;
+            color: #fff;
+        }
+
+        .btn-youtube {
+            border-color: #ff0000;
+            color: #ff0000;
+        }
+
+        .btn-youtube:hover {
+            background: #ff0000;
+            color: #fff;
+        }
+
+        /* Storage Status */
+        .storage-widget {
+            width: 200px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9px;
+            color: var(--text-dim);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            text-align: center;
+        }
+
+        .storage-bar-container {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .storage-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--accent);
+            border-radius: 4px;
+            transition: width 0.5s ease, background 0.3s ease;
+        }
+
+        .storage-bar.warning {
+            background: var(--warning);
+        }
+
+        .storage-bar.danger {
+            background: var(--danger);
+        }
+
+        /* --- DELETE MODAL --- */
+        #delete-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 40000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 20px;
+        }
+
+        .delete-box {
+            border: 1px solid var(--accent);
+            width: 100%;
+            max-width: 300px;
+            background: #000;
+            padding: 30px 25px;
+            border-radius: 16px;
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.2);
+        }
+
+        .delete-title {
+            color: var(--danger);
+            font-size: 14px;
+            font-weight: bold;
+            letter-spacing: 3px;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+
+        #delete-filename {
+            color: var(--text-dim);
+            font-size: 10px;
+            margin-bottom: 25px;
+            font-family: 'JetBrains Mono', monospace;
+            text-align: center;
+            word-break: break-all;
+        }
+
+        .delete-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .delete-btn {
+            flex: 1;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 10px;
+            cursor: pointer;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: bold;
+            transition: all 0.2s;
+            border: 1px solid;
+        }
+
+        .delete-btn.cancel {
+            background: transparent;
+            border-color: var(--text-dim);
+            color: var(--text-dim);
+        }
+
+        .delete-btn.cancel:hover {
+            background: var(--text-dim);
+            color: #000;
+        }
+
+        .delete-btn.confirm {
+            background: #400;
+            border-color: var(--danger);
+            color: white;
+        }
+
+        .delete-btn.confirm:hover {
+            background: var(--danger);
+        }
+
+        /* --- THEME TOGGLE --- */
+        .theme-toggle {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 5000;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.1);
+            border-color: var(--primary);
+        }
+
+        /* --- KEYBOARD SHORTCUT HINT --- */
+        .shortcut-hint {
+            position: fixed;
+            bottom: 75px;
+            right: 20px;
+            font-size: 8px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            text-align: right;
+            opacity: 0.6;
+            display: none;
+        }
+
+        @media (min-width: 768px) {
+            .shortcut-hint {
+                display: block;
+            }
+        }
+
+        /* --- RESPONSIVE --- */
+        @media (max-width: 360px) {
+            #sidebar {
+                width: 100vw;
+                left: -100vw;
+            }
+
+            #source-viewer {
+                width: 95%;
+                padding: 12px;
+            }
+        }
+        
+              /* Feedback saat elemen sedang diangkat */
+.file-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.95);
+    border: 2px dashed var(--primary);
+    background: var(--primary-dim);
+    z-index: 100;
+}
+
+/* Garis indikator posisi jatuh (drop indicator) */
+.file-item.drag-over {
+    border-top: 3px solid var(--accent) !important;
+    background: var(--accent-dim);
+    transition: all 0.2s ease;
+}
+
+    </style>
+</head>
+<body>
+    <!-- Storage Data -->
+    <script id="STORAGE" type="application/json">[]</script>
+
+    <!-- Security Alert -->
+    <div id="security-alert">
+        <div class="alert-box">
+            <div class="alert-title">ACCESS DENIED</div>
+            <div style="color: var(--danger); font-size: 9px; margin-top: 8px; letter-spacing: 1.5px; opacity: 0.8; font-family: 'JetBrains Mono', monospace;">
+                SYSTEM CORE IS PROTECTED
+            </div>
+        </div>
+    </div>
+
+    <!-- Splash Screen -->
+    <div id="splash-screen">
+        <div class="nexus-logo">NEXUS</div>
+        <div class="loader-container">
+            <div class="loader-bar" id="loader-bar"></div>
+        </div>
+        <div class="loading-text" id="loader-text">BOOTING...</div>
+    </div>
+
+    <!-- Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Edge Sensors -->
+    <div id="sensor-top" class="sensor-edge"></div>
+    <div id="sensor-left" class="sensor-edge"></div>
+
+    <!-- Overlay -->
+    <div id="overlay"></div>
+
+    <!-- Navigation -->
+    <nav id="nav" class="no-select">
+        <button class="icon-btn" data-action="sidebar" aria-label="Toggle sidebar">☰</button>
+        <button class="icon-btn" data-action="fullscreen" aria-label="Toggle fullscreen">⛶</button>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="no-select">
+        <div class="sidebar-header">
+            <h3 id="home-btn">NEXUS PORTAL</h3>
+            <div class="header-controls">
+                <p id="mode-text"></p>
+                <div class="header-btn" id="eye-btn" aria-label="View source code">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="search-container">
+            <input type="text" id="search-input" placeholder="🔍 Search files...">
+        </div>
+
+        <!-- Editor UI -->
+        <div id="editor-ui">
+            <input type="file" id="file-input" style="display:none" multiple accept=".html,.htm,.txt,.pdf,.jpg,.jpeg,.png,.gif,.svg,.webp">
+            <button class="upload-btn" id="upload-btn">+ UPLOAD FILES</button>
+        </div>
+
+        <!-- File List -->
+        <div class="file-list-header">
+            <span class="file-list-title">DIRECTORY</span>
+            <span class="file-count" id="file-count">0</span>
+        </div>
+        <ul id="file-list" class="file-list"></ul>
+
+        <!-- Footer -->
+        <div class="sidebar-footer">
+            <div id="export-ui" style="display: none;">
+                <button class="btn-action secondary" id="export-btn">GENERATE BUNDLE</button>
+            </div>
+            <div id="clear-ui" style="display: none;">
+                <button class="btn-action danger" id="clear-btn">CLEAR ALL DATA</button>
+            </div>
+            <div id="system-status">
+                <div>[ SYSTEM: <span id="status-text">STABLE</span> ]</div>
+                <div>[ UPTIME: <span id="uptime-clock">00:00:00</span> ]</div>
+            </div>
+            <div class="copyright" id="copyright">HARIYANTO SJ13 © 2025</div>
+        </div>
+    </aside>
+
+    <!-- View Container -->
+    <main id="view-container">
+        <div id="welcome-screen">
+            <div class="nexus-logo">NEXUS</div>
+            <div class="nexus-tag">Modern HTML Viewer</div>
+            <div class="status-box">
+                <div>> SYSTEM: ONLINE</div>
+                <div>> MODE: READY</div>
+                <div>> WAITING FOR INPUT...</div>
+            </div>
+        </div>
+        <iframe id="view" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"></iframe>
+    </main>
+
+    <!-- Source Viewer Modal -->
+    <div id="nexus-overlay" class="nexus-overlay"></div>
+    <div id="source-viewer" role="dialog" aria-modal="true" aria-labelledby="editing-filename">
+        <div class="viewer-header">
+            <div style="display: flex; align-items: center;">
+                <span class="viewer-title" id="editing-filename">SOURCE CODE</span>
+                <span class="unsaved-indicator" id="unsaved-indicator"></span>
+            </div>
+            <div class="viewer-actions">
+                <button class="modal-btn undo" id="undo-btn" title="Undo (Ctrl+Z)">↶</button>
+                <button class="modal-btn redo" id="redo-btn" title="Redo (Ctrl+Y)">↷</button>
+                <button class="modal-btn copy" id="copy-btn">COPY</button>
+                <button class="modal-btn save" id="save-btn">APPLY</button>
+                <button class="modal-btn close" id="close-viewer-btn">CLOSE</button>
+            </div>
+        </div>
+        <div id="pre-container">
+            <code id="source-content" contenteditable="true" spellcheck="false"></code>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="nexus-toast">
+        <div class="toast-inner">
+            <div class="toast-dot"></div>
+            <span id="toast-msg"></span>
+        </div>
+    </div>
+
+    <!-- Rename Modal -->
+    <div id="rename-modal" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <div class="modal-title">RENAME FILE</div>
+            <input type="text" id="rename-input" class="modal-input" placeholder="Enter new filename...">
+            <div class="modal-actions">
+                <button class="modal-action-btn cancel" id="cancel-rename">CANCEL</button>
+                <button class="modal-action-btn confirm" id="confirm-rename">RENAME</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Universal Confirm Modal -->
+    <div id="confirm-modal" role="dialog" aria-modal="true">
+        <div class="modal-box">
+            <div class="modal-title" id="confirm-title">CONFIRM</div>
+            <div class="modal-message" id="confirm-message">Are you sure?</div>
+            <div class="modal-actions">
+                <button class="modal-action-btn cancel" id="cancel-confirm">CANCEL</button>
+                <button class="modal-action-btn confirm" id="confirm-action">CONFIRM</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Developer Modal -->
+    <div id="dev-modal">
+        <div class="dev-modal-content">
+            <div class="dev-box" onclick="event.stopPropagation()">
+                <div class="dev-title">ACCESS GRANTED</div>
+                <div class="dev-identity">> IDENTITY: HARIYANTO SJ13</div>
+                <div class="dev-content">
+                    <p>> NEXUS CORE v1.1.0 [ENHANCED]<br>> DEVELOPER: HARIYANTO SJ13</p>
+                    <h2>Halo! 👋</h2>
+                    <p>Sepertinya kamu cukup penasaran sampai nekan tombol copyright yah? Hahahah.</p>
+                    <p>Selamat datang di <strong>Nexus HTML</strong>! Aplikasi ini sebenarnya PWA yang aku bikin karena dulu ribet buka file HTML satu-satu di browser.</p>
+                    <p>Fungsi utamanya buat membundle file HTML biar gampang dibagikan, plus ada fitur edit singkat.</p>
+                    <p class="dev-tip">*Tips: Gunakan Treb Edit buat editing yang lebih berat.</p>
+                    <p><strong>"Cuma mau simpan 1 file?"</strong> Copas aja kodenya, simpan dan ganti ekstensi .txt jadi <strong>.html</strong>.</p>
+                    <p>Pantau <strong>Storage System</strong> di bawah ya, kalau sudah merah (batas 5MB) aplikasinya mungkin bakal lag.</p>
+                    <div class="dev-warning">
+                        <strong>⌨️ Keyboard Shortcuts:</strong><br>
+                        • Ctrl+S = Save changes<br>
+                        • Esc = Close modal<br>
+                        • Tab = Insert indent
+                    </div>
+                    <p style="opacity: 0.7; font-size: 10px;">Btw, recehannya tuan 😗:</p>
+                    <div class="button-group">
+                        <a href="https://trakteer.id/AntoSJ13" class="footer-link btn-trakteer" target="_blank" rel="noopener noreferrer">☕ TRAKTEER</a>
+                        <a href="https://youtu.be/PYWRUUFDNJA?si=SRuFqRra7xe8CWWK" class="footer-link btn-youtube" target="_blank" rel="noopener noreferrer">▶️ YOUTUBE</a>
+                    </div>
+                </div>
+                <button class="dev-dismiss" id="dismiss-dev">DISMISS</button>
+            </div>
+            <div class="storage-widget">
+                SYSTEM STORAGE: <span id="storage-percent">0</span>%
+                <div class="storage-bar-container">
+                    <div class="storage-bar" id="storage-bar"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" role="dialog" aria-modal="true">
+        <div class="delete-box">
+            <div class="delete-title">CONFIRM PURGE</div>
+            <div id="delete-filename">> FILENAME_HERE</div>
+            <div class="delete-actions">
+                <button class="delete-btn cancel" id="cancel-delete">CANCEL</button>
+                <button class="delete-btn confirm" id="confirm-delete">ERASE DATA</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Theme Toggle -->
+    <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">🌙</button>
+
+    <!-- Keyboard Shortcut Hint -->
+    <div class="shortcut-hint">
+        Ctrl+S: Save | Esc: Close
+    </div>
+
+    <!-- ========== JAVASCRIPT ========== -->
+    <script>
+    (function() {
+        'use strict';
+
+        // ===== CONFIGURATION =====
+        const CONFIG = {
+            MAX_FILE_SIZE: 2 * 1024 * 1024, // 2MB per file
+            MAX_STORAGE_PERCENT: 90,
+            AUTO_SAVE_INTERVAL: 30000, // 30 seconds
+            NAV_HIDE_DELAY: 3000,
+            TOAST_DURATION: 3000,
+            PARTICLE_COUNT: 60
+        };
+
+        // ===== STATE =====
+        let dataFiles = [];
+        let isBundle = false;
+        let isAlertActive = false;
+        let currentFileIndex = -1;
+        let hasUnsavedChanges = false;
+        let navTimer = null;
+        let autoSaveTimer = null;
+        let uptimeSeconds = 0;
+        let undoStack = [];
+        let redoStack = [];
+        let fileToDeleteIndex = null;
+        let fileToRenameIndex = null;
+        let confirmCallback = null;
+
+        // ===== DOM ELEMENTS =====
+        const $ = (id) => document.getElementById(id);
+        const $$ = (sel) => document.querySelectorAll(sel);
+
+        const elements = {
+            splash: $('splash-screen'),
+            loaderBar: $('loader-bar'),
+            loaderText: $('loader-text'),
+            canvas: $('bg-canvas'),
+            nav: $('nav'),
+            sidebar: $('sidebar'),
+            overlay: $('overlay'),
+            storage: $('STORAGE'),
+            view: $('view'),
+            fileList: $('file-list'),
+            fileCount: $('file-count'),
+            editorUI: $('editor-ui'),
+            exportUI: $('export-ui'),
+            clearUI: $('clear-ui'),
+            modeText: $('mode-text'),
+            welcome: $('welcome-screen'),
+            sourceViewer: $('source-viewer'),
+            sourceContent: $('source-content'),
+            nexusOverlay: $('nexus-overlay'),
+            securityAlert: $('security-alert'),
+            toast: $('nexus-toast'),
+            toastMsg: $('toast-msg'),
+            devModal: $('dev-modal'),
+            deleteModal: $('delete-modal'),
+            deleteFilename: $('delete-filename'),
+            searchInput: $('search-input'),
+            fileInput: $('file-input'),
+            saveBtn: $('save-btn'),
+            unsavedIndicator: $('unsaved-indicator'),
+            storagePercent: $('storage-percent'),
+            storageBar: $('storage-bar'),
+            uptimeClock: $('uptime-clock'),
+            statusText: $('status-text'),
+            themeToggle: $('theme-toggle'),
+            editingFilename: $('editing-filename'),
+            renameModal: $('rename-modal'),
+            renameInput: $('rename-input'),
+            confirmModal: $('confirm-modal'),
+            confirmTitle: $('confirm-title'),
+            confirmMessage: $('confirm-message')
+        };
+
+        // ===== UTILITIES =====
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function sanitizeFilename(name) {
+            return name
+                .replace(/[<>:"/\\|?*]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .substring(0, 100) || 'Untitled';
+        }
+
+        function getFileIcon(file) {
+            if (file.t) {
+                if (file.t.startsWith('image/')) return '🖼️';
+                if (file.t.includes('pdf')) return '📕';
+            }
+            const ext = file.n.toLowerCase();
+            if (ext.endsWith('.html') || ext.endsWith('.htm')) return '🌐';
+            if (ext.endsWith('.txt')) return '📝';
+            return '📄';
+        }
+
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(this, args), wait);
+            };
+        }
+
+        // ===== TOAST NOTIFICATION =====
+        function showToast(message) {
+            const inner = elements.toast.querySelector('.toast-inner');
+            elements.toastMsg.textContent = message.toUpperCase();
+            elements.toast.style.display = 'block';
+            
+            setTimeout(() => {
+                inner.style.opacity = '1';
+                inner.style.transform = 'translateY(0)';
+            }, 10);
+
+            setTimeout(() => {
+                inner.style.opacity = '0';
+                inner.style.transform = 'translateY(-20px)';
+                setTimeout(() => elements.toast.style.display = 'none', 400);
+            }, CONFIG.TOAST_DURATION);
+        }
+
+        // ===== SPLASH SCREEN =====
+        function runSplash() {
+            let progress = 0;
+            const messages = ['BOOTING...', 'LOADING ASSETS...', 'INITIALIZING...', 'ACCESS GRANTED'];
+            
+            const interval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress > 100) progress = 100;
+                
+                elements.loaderBar.style.width = progress + '%';
+                
+                if (progress < 30) elements.loaderText.textContent = messages[0];
+                else if (progress < 60) elements.loaderText.textContent = messages[1];
+                else if (progress < 90) elements.loaderText.textContent = messages[2];
+                else elements.loaderText.textContent = messages[3];
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => elements.splash.classList.add('fade-out'), 400);
+                }
+            }, 80);
+        }
+
+        // ===== CANVAS BACKGROUND =====
+        let particles = [];
+        let animationId = null;
+        const ctx = elements.canvas.getContext('2d');
+
+        function initCanvas() {
+            elements.canvas.width = window.innerWidth;
+            elements.canvas.height = window.innerHeight;
+            particles = [];
+            
+            for (let i = 0; i < CONFIG.PARTICLE_COUNT; i++) {
+                particles.push({
+                    x: Math.random() * elements.canvas.width,
+                    y: Math.random() * elements.canvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    size: Math.random() * 2
+                });
+            }
+        }
+
+        function animate() {
+            ctx.clearRect(0, 0, elements.canvas.width, elements.canvas.height);
+            ctx.fillStyle = 'rgba(99, 102, 241, 0.4)';
+
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+
+                if (p.x < 0 || p.x > elements.canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > elements.canvas.height) p.vy *= -1;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                particles.forEach(p2 => {
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 100) {
+                        ctx.strokeStyle = `rgba(99, 102, 241, ${1 - dist / 100})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.stroke();
+                    }
+                });
+            });
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        function startAnimation() {
+            if (!animationId) animate();
+        }
+
+        function stopAnimation() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+        }
+
+        // ===== NAVIGATION =====
+        function wakeUp() {
+            elements.nav.classList.remove('hidden');
+            clearTimeout(navTimer);
+            
+            if (!elements.sidebar.classList.contains('active')) {
+                navTimer = setTimeout(() => {
+                    elements.nav.classList.add('hidden');
+                }, CONFIG.NAV_HIDE_DELAY);
+            }
+        }
+
+        function toggleSidebar() {
+            elements.sidebar.classList.toggle('active');
+            elements.overlay.classList.toggle('active');
+            wakeUp();
+
+            if (elements.sidebar.classList.contains('active')) {
+                elements.statusText.textContent = 'RE-SYNCING...';
+                elements.statusText.style.color = '#fbbf24';
+                setTimeout(() => {
+                    elements.statusText.textContent = 'STABLE';
+                    elements.statusText.style.color = '';
+                }, 800);
+            }
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        // ===== THEME =====
+        function toggleTheme() {
+            document.documentElement.classList.toggle('light-theme');
+            const isLight = document.documentElement.classList.contains('light-theme');
+            elements.themeToggle.textContent = isLight ? '☀️' : '🌙';
+            localStorage.setItem('nexusTheme', isLight ? 'light' : 'dark');
+        }
+
+        function loadTheme() {
+            const saved = localStorage.getItem('nexusTheme');
+            if (saved === 'light') {
+                document.documentElement.classList.add('light-theme');
+                elements.themeToggle.textContent = '☀️';
+            }
+        }
+
+        // ===== STORAGE =====
+        function updateStorageInfo() {
+            try {
+                let total = 0;
+                for (let key in localStorage) {
+                    if (localStorage.hasOwnProperty(key)) {
+                        total += (localStorage[key].length + key.length) * 2;
+                    }
+                }
+
+                const limit = 5 * 1024 * 1024;
+                const percent = Math.min((total / limit) * 100, 100).toFixed(1);
+
+                elements.storagePercent.textContent = percent;
+                elements.storageBar.style.width = percent + '%';
+
+                elements.storageBar.classList.remove('warning', 'danger');
+                if (percent > 85) {
+                    elements.storageBar.classList.add('danger');
+                    elements.storagePercent.style.color = 'var(--danger)';
+                } else if (percent > 70) {
+                    elements.storageBar.classList.add('warning');
+                    elements.storagePercent.style.color = 'var(--warning)';
+                } else {
+                    elements.storagePercent.style.color = 'var(--accent)';
+                }
+
+                return parseFloat(percent);
+            } catch (e) {
+                console.warn('Storage check failed:', e);
+                return 0;
+            }
+        }
+
+        // ===== FILE MANAGEMENT =====
+        function saveData() {
+            try {
+                localStorage.setItem('nexusData', JSON.stringify(dataFiles));
+                updateStorageInfo();
+            } catch (e) {
+                showToast('STORAGE FULL!');
+                console.error('Save failed:', e);
+            }
+        }
+
+        function render() {
+            elements.fileList.innerHTML = '';
+            elements.fileCount.textContent = dataFiles.length;
+
+            dataFiles.forEach((f, i) => {
+                const li = document.createElement('li');
+                li.className = 'file-item';
+                li.dataset.index = i;
+                li.dataset.name = f.n.toLowerCase();
+
+                li.draggable = !isBundle;
+                
+                const icon = getFileIcon(f);
+                const size = f.c ? formatFileSize(atob(f.c).length) : '0 B';
+                const editBtn = isBundle ? '' : `<span class="action-btn edit" data-action="edit" title="Rename">✎</span>`;
+                const delBtn = isBundle ? '' : `<span class="action-btn delete" data-action="delete" title="Delete">✕</span>`;
+
+                li.innerHTML = `
+                    <div class="accent-line"></div>
+                    <span class="file-icon">${icon}</span>
+                    <div class="file-info" data-action="open">
+                        <span class="file-name">${f.n}</span>
+                        <span class="file-size">${size}</span>
+                    </div>
+                    <div class="file-actions">
+                        ${editBtn}
+                        ${delBtn}
+                    </div>
+                `;
+
+                elements.fileList.appendChild(li);
+            });
+
+            saveData();
+        }
+
+        function openFile(index) {
+            const f = dataFiles[index];
+            if (!f) return;
+
+            currentFileIndex = index;
+            
+            try {
+                const bin = atob(f.c);
+                const arr = new Uint8Array(bin.length);
+                for (let j = 0; j < bin.length; j++) {
+                    arr[j] = bin.charCodeAt(j);
+                }
+
+                let blob;
+                if (f.t && f.t.startsWith('image/')) {
+                    const htmlContent = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+                            <style>
+                                body { margin:0; display:flex; justify-content:center; align-items:center; background:#0a0a0a; min-height:100vh; }
+                                img { max-width:100%; height:auto; }
+                            </style>
+                        </head>
+                        <body><img src="data:${f.t};base64,${f.c}" alt="${f.n}"></body>
+                        </html>`;
+                    blob = new Blob([htmlContent], { type: 'text/html' });
+                } else {
+                    blob = new Blob([arr], { type: f.t || 'text/html' });
+                }
+
+                if (elements.view.src) {
+                    URL.revokeObjectURL(elements.view.src);
+                }
+
+                elements.view.src = URL.createObjectURL(blob);
+                elements.modeText.textContent = f.n;
+                elements.welcome.style.display = 'none';
+                elements.view.style.display = 'block';
+
+                if (elements.sidebar.classList.contains('active')) {
+                    toggleSidebar();
+                }
+            } catch (e) {
+                showToast('FAILED TO OPEN FILE');
+                console.error('Open file error:', e);
+            }
+        }
+
+        function goHome() {
+            sessionStorage.setItem('skipSplash', 'true');
+            elements.view.style.display = 'none';
+            elements.welcome.style.display = 'flex';
+            elements.modeText.textContent = isBundle ? 'SECURE VAULT' : 'NEXUS VIEWER';
+            currentFileIndex = -1;
+            
+            if (elements.sidebar.classList.contains('active')) {
+                toggleSidebar();
+            }
+        }
+
+        // ===== CUSTOM MODALS =====
+
+        // Rename Modal
+        function showRenameModal(index) {
+            fileToRenameIndex = index;
+            elements.renameInput.value = dataFiles[index].n;
+            elements.renameModal.style.display = 'flex';
+            
+            setTimeout(() => {
+                elements.renameInput.focus();
+                elements.renameInput.select();
+            }, 100);
+        }
+
+        function closeRenameModal() {
+            elements.renameModal.style.display = 'none';
+            elements.renameInput.value = '';
+            fileToRenameIndex = null;
+        }
+
+        function confirmRename() {
+            const newName = elements.renameInput.value.trim();
+            
+            if (fileToRenameIndex !== null && newName) {
+                dataFiles[fileToRenameIndex].n = sanitizeFilename(newName);
+                render();
+                closeRenameModal();
+                showToast('RENAMED SUCCESSFULLY');
+            } else if (!newName) {
+                showToast('NAME CANNOT BE EMPTY');
+            }
+        }
+
+        // Universal Confirm Modal
+        function showConfirmModal(title, message, onConfirm, isDanger = false) {
+            elements.confirmTitle.textContent = title;
+            elements.confirmMessage.textContent = message;
+            confirmCallback = onConfirm;
+            
+            const confirmBtn = $('confirm-action');
+            confirmBtn.classList.toggle('danger', isDanger);
+            confirmBtn.classList.toggle('confirm', !isDanger);
+            confirmBtn.textContent = isDanger ? 'DELETE' : 'CONFIRM';
+            
+            elements.confirmModal.style.display = 'flex';
+        }
+
+        function closeConfirmModal() {
+            elements.confirmModal.style.display = 'none';
+            confirmCallback = null;
+        }
+
+        function executeConfirm() {
+            if (confirmCallback) {
+                confirmCallback();
+            }
+            closeConfirmModal();
+        }
+
+        // Delete Modal
+        function showDeleteModal(index) {
+            fileToDeleteIndex = index;
+            elements.deleteFilename.textContent = '> ' + dataFiles[index].n.toUpperCase();
+            elements.deleteModal.style.display = 'flex';
+        }
+
+        function closeDeleteModal() {
+            elements.deleteModal.style.display = 'none';
+            fileToDeleteIndex = null;
+        }
+
+        function confirmDelete() {
+            if (fileToDeleteIndex !== null) {
+                dataFiles.splice(fileToDeleteIndex, 1);
+                render();
+                closeDeleteModal();
+                showToast('DATA PURGED');
+
+                if (currentFileIndex === fileToDeleteIndex) {
+                    goHome();
+                }
+            }
+        }
+
+        function clearAllData() {
+            showConfirmModal(
+                'PURGE ALL DATA',
+                'This will delete ALL files permanently. This action cannot be undone!',
+                () => {
+                    dataFiles = [];
+                    render();
+                    goHome();
+                    showToast('ALL DATA CLEARED');
+                },
+                true
+            );
+        }
+
+        // ===== FILE UPLOAD =====
+        function handleUpload(e) {
+            const storagePercent = updateStorageInfo();
+            
+            if (storagePercent >= CONFIG.MAX_STORAGE_PERCENT) {
+                showToast('STORAGE FULL! DELETE FILES FIRST');
+                return;
+            }
+
+            Array.from(e.target.files).forEach(file => {
+                if (file.size > CONFIG.MAX_FILE_SIZE) {
+                    showToast(`FILE TOO LARGE: ${file.name}`);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    try {
+                        const base64Data = ev.target.result.split(',')[1];
+                        dataFiles.push({
+                            n: sanitizeFilename(file.name),
+                            c: base64Data,
+                            t: file.type
+                        });
+                        render();
+                        showToast('IMPORTED: ' + file.name);
+                    } catch (err) {
+                        showToast('IMPORT FAILED');
+                        console.error('Upload error:', err);
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+
+            e.target.value = '';
+        }
+
+        // ===== DRAG & DROP REORDER =====
+        // ===== ENHANCED DRAG & DROP SYSTEM =====
+let draggedIndex = null;
+
+function handleDragStart(e, index) {
+    draggedIndex = index;
+    e.target.classList.add('dragging');
+    
+    // Memberikan efek "ghost" transparan saat ditarik
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index);
+}
+
+function handleDragEnd(e) {
+    e.target.classList.remove('dragging');
+    $$('.file-item').forEach(el => {
+        el.classList.remove('drag-over');
+    });
+    draggedIndex = null;
+}
+
+function handleDragOver(e) {
+    e.preventDefault(); // Wajib agar drop bisa jalan
+    e.dataTransfer.dropEffect = 'move';
+    
+    const item = e.currentTarget;
+    if (item && !item.classList.contains('dragging')) {
+        item.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(e, targetIndex) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    if (draggedIndex !== null && draggedIndex !== targetIndex) {
+        // Pindahkan posisi data di array
+        const movedItem = dataFiles.splice(draggedIndex, 1)[0];
+        dataFiles.splice(targetIndex, 0, movedItem);
+        
+        render(); // Gambar ulang list
+        showToast('ORDER UPDATED');
+        
+        // Jika bukan bundle, simpan ke localStorage
+        if (!isBundle) {
+            saveData();
+        }
+    }
+}
+
+        // ===== SOURCE VIEWER =====
+        function toggleViewSource() {
+            const currentName = elements.modeText.textContent;
+
+            if (isAlertActive) {
+                dismissSecurityAlert();
+                return;
+            }
+
+            if (!currentName || currentName === 'NEXUS VIEWER' || currentName === 'SECURE VAULT') {
+                showSecurityAlert();
+                return;
+            }
+
+            const file = dataFiles.find(f => f.n === currentName);
+            if (!file) return;
+
+            if (elements.sourceViewer.style.display === 'flex') {
+                closeSourceViewer();
+            } else {
+                openSourceViewer(file);
+            }
+        }
+
+        function openSourceViewer(file) {
+            try {
+                const decoded = decodeURIComponent(escape(atob(file.c)));
+                elements.sourceContent.textContent = decoded;
+                elements.editingFilename.textContent = file.n;
+                elements.nexusOverlay.style.display = 'block';
+                elements.sourceViewer.style.display = 'flex';
+                elements.nav.style.display = 'none';
+                
+                undoStack = [decoded];
+                redoStack = [];
+                hasUnsavedChanges = false;
+                elements.unsavedIndicator.classList.remove('active');
+                elements.saveBtn.style.display = 'none';
+
+                startAutoSave();
+            } catch (e) {
+                showToast('FAILED TO DECODE FILE');
+                console.error('Decode error:', e);
+            }
+        }
+
+        function closeSourceViewer(force = false) {
+            if (hasUnsavedChanges && !force) {
+                showConfirmModal(
+                    'UNSAVED CHANGES',
+                    'You have unsaved changes. Close anyway?',
+                    () => forceCloseSourceViewer(),
+                    false
+                );
+                return;
+            }
+            forceCloseSourceViewer();
+        }
+
+        function forceCloseSourceViewer() {
+            elements.nexusOverlay.style.display = 'none';
+            elements.sourceViewer.style.display = 'none';
+            elements.nav.style.display = 'flex';
+            elements.sourceContent.textContent = '';
+            
+            stopAutoSave();
+            hasUnsavedChanges = false;
+            elements.unsavedIndicator.classList.remove('active');
+            elements.saveBtn.style.display = 'none';
+        }
+
+        function showSecurityAlert() {
+            isAlertActive = true;
+            document.body.classList.add('no-click');
+            elements.securityAlert.style.display = 'flex';
+
+            setTimeout(() => {
+                dismissSecurityAlert();
+            }, 2000);
+        }
+
+        function dismissSecurityAlert() {
+            elements.securityAlert.style.display = 'none';
+            document.body.classList.remove('no-click');
+            isAlertActive = false;
+        }
+
+        // ===== CODE EDITOR =====
+        function handleEditorInput() {
+            const content = elements.sourceContent.textContent;
+            
+            if (content.trim() === '') {
+                elements.sourceContent.textContent = '';
+            }
+
+            if (undoStack[undoStack.length - 1] !== content) {
+                undoStack.push(content);
+                if (undoStack.length > 50) undoStack.shift();
+                redoStack = [];
+            }
+
+            if (!hasUnsavedChanges) {
+                hasUnsavedChanges = true;
+                elements.unsavedIndicator.classList.add('active');
+                elements.saveBtn.style.display = 'inline-block';
+            }
+        }
+
+        function handleEditorKeydown(e) {
+            if (e.key === 'Tab') {
+                e.preventDefault();
+                const sel = window.getSelection();
+                const range = sel.getRangeAt(0);
+                const tab = document.createTextNode('    ');
+                range.insertNode(tab);
+                range.setStartAfter(tab);
+                range.setEndAfter(tab);
+                handleEditorInput();
+            }
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const sel = window.getSelection();
+                const range = sel.getRangeAt(0);
+                
+                const textBefore = range.startContainer.textContent.substring(0, range.startOffset);
+                const lines = textBefore.split('\n');
+                const lastLine = lines[lines.length - 1];
+                const indent = lastLine.match(/^\s*/)[0];
+
+                const br = document.createTextNode('\n' + indent);
+                range.insertNode(br);
+                range.setStartAfter(br);
+                range.setEndAfter(br);
+                
+                handleEditorInput();
+            }
+
+            if (e.ctrlKey && e.key === 'z') {
+                e.preventDefault();
+                undo();
+            }
+
+            if (e.ctrlKey && e.key === 'y') {
+                e.preventDefault();
+                redo();
+            }
+
+            if (e.ctrlKey && e.key === 's') {
+                e.preventDefault();
+                saveChanges();
+            }
+        }
+
+        function undo() {
+            if (undoStack.length > 1) {
+                redoStack.push(undoStack.pop());
+                elements.sourceContent.textContent = undoStack[undoStack.length - 1];
+                showToast('UNDO');
+            }
+        }
+
+        function redo() {
+            if (redoStack.length > 0) {
+                const content = redoStack.pop();
+                undoStack.push(content);
+                elements.sourceContent.textContent = content;
+                showToast('REDO');
+            }
+        }
+
+        function copySource() {
+            const text = elements.sourceContent.textContent;
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+
+            try {
+                document.execCommand('copy');
+                showToast('COPIED TO CLIPBOARD');
+            } catch (e) {
+                showToast('COPY FAILED');
+            }
+
+            document.body.removeChild(textarea);
+        }
+
+        function saveChanges() {
+            const newCode = elements.sourceContent.textContent;
+            const currentName = elements.modeText.textContent;
+            const fileIndex = dataFiles.findIndex(f => f.n === currentName);
+
+            if (fileIndex === -1) {
+                showToast('FILE NOT FOUND');
+                return;
+            }
+
+            try {
+                const blob = new Blob([newCode], { type: dataFiles[fileIndex].t || 'text/html' });
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const base64 = e.target.result.split(',')[1];
+                    dataFiles[fileIndex].c = base64;
+                    saveData();
+                    render();
+                    openFile(fileIndex);
+
+                    hasUnsavedChanges = false;
+                    elements.unsavedIndicator.classList.remove('active');
+                    elements.saveBtn.style.display = 'none';
+                    
+                    showToast('CHANGES SAVED');
+                };
+                
+                reader.readAsDataURL(blob);
+            } catch (e) {
+                showToast('SAVE FAILED');
+                console.error('Save error:', e);
+            }
+        }
+
+        function startAutoSave() {
+            stopAutoSave();
+            autoSaveTimer = setInterval(() => {
+                if (hasUnsavedChanges) {
+                    saveChanges();
+                }
+            }, CONFIG.AUTO_SAVE_INTERVAL);
+        }
+
+        function stopAutoSave() {
+            if (autoSaveTimer) {
+                clearInterval(autoSaveTimer);
+                autoSaveTimer = null;
+            }
+        }
+
+        // ===== SEARCH =====
+        function handleSearch(e) {
+            const query = e.target.value.toLowerCase();
+            $$('.file-item').forEach(item => {
+                const name = item.dataset.name;
+                item.classList.toggle('hidden', !name.includes(query));
+            });
+        }
+
+        // ===== EXPORT =====
+        function exportBundle() {
+            if (window.AndroidBridge) {
+                AndroidBridge.showToast('⚠️ SAVE AS: .html');
+            }
+
+            try {
+                const clone = document.documentElement.cloneNode(true);
+                
+                clone.querySelector('#STORAGE').textContent = JSON.stringify(dataFiles);
+                clone.querySelector('#splash-screen').classList.remove('fade-out');
+                clone.querySelector('#sidebar').classList.remove('active');
+                clone.querySelector('#overlay').classList.remove('active');
+                
+                const editorUI = clone.querySelector('#editor-ui');
+                const exportUI = clone.querySelector('#export-ui');
+                const clearUI = clone.querySelector('#clear-ui');
+                
+                if (editorUI) editorUI.style.display = 'none';
+                if (exportUI) exportUI.style.display = 'none';
+                if (clearUI) clearUI.style.display = 'none';
+                
+                clone.querySelector('#nav').classList.remove('hidden');
+
+                const finalHTML = '<!DOCTYPE html>\n' + clone.outerHTML;
+                const blob = new Blob([finalHTML], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const filename = 'Nexus_Bundle_' + new Date().toISOString().slice(0, 10) + '.html';
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+
+                setTimeout(() => URL.revokeObjectURL(url), 100);
+                showToast('BUNDLE GENERATED');
+            } catch (e) {
+                showToast('EXPORT FAILED');
+                console.error('Export error:', e);
+            }
+        }
+
+        // ===== MODALS =====
+        function showDevModal() {
+            elements.devModal.style.display = 'flex';
+            updateStorageInfo();
+        }
+
+        function closeDevModal() {
+            elements.devModal.style.display = 'none';
+        }
+
+        // ===== UPTIME CLOCK =====
+        function updateUptime() {
+            uptimeSeconds++;
+            const hrs = Math.floor(uptimeSeconds / 3600).toString().padStart(2, '0');
+            const mins = Math.floor((uptimeSeconds % 3600) / 60).toString().padStart(2, '0');
+            const secs = (uptimeSeconds % 60).toString().padStart(2, '0');
+            elements.uptimeClock.textContent = `${hrs}:${mins}:${secs}`;
+
+            if (uptimeSeconds % 15 === 0) {
+                const statuses = ['STABLE', 'PROCESSING', 'SECURE', 'OPTIMIZED', 'SYNCED'];
+                elements.statusText.textContent = statuses[Math.floor(Math.random() * statuses.length)];
+            }
+        }
+
+        // ===== INITIALIZATION =====
+        function init() {
+            const skipSplash = sessionStorage.getItem('skipSplash');
+            if (skipSplash === 'true') {
+                sessionStorage.removeItem('skipSplash');
+                elements.splash.style.display = 'none';
+            } else {
+                runSplash();
+            }
+
+            loadTheme();
+            initCanvas();
+            startAnimation();
+
+            try {
+                const storedData = JSON.parse(elements.storage.textContent);
+                if (storedData && storedData.length > 0) {
+                    dataFiles = storedData;
+                    isBundle = true;
+                    elements.modeText.textContent = 'SECURE VAULT';
+                } else {
+                    dataFiles = JSON.parse(localStorage.getItem('nexusData') || '[]');
+                    isBundle = false;
+                    elements.modeText.textContent = 'NEXUS VIEWER';
+                    elements.editorUI.classList.add('active');
+                    elements.exportUI.style.display = 'block';
+                    elements.clearUI.style.display = 'block';
+                }
+                render();
+            } catch (e) {
+                console.error('Data load error:', e);
+                dataFiles = [];
+                render();
+            }
+
+            updateStorageInfo();
+            setInterval(updateUptime, 1000);
+
+            // Detect APK mode
+            if (window.location.protocol === 'file:') {
+                document.body.classList.add('app-mode');
+            }
+        }
+
+        // ===== EVENT LISTENERS =====
+        
+        $('sensor-top').addEventListener('mousemove', wakeUp);
+        $('sensor-left').addEventListener('mousemove', wakeUp);
+        document.body.addEventListener('touchstart', wakeUp, { passive: true });
+
+        $$('.icon-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const action = e.currentTarget.dataset.action;
+                if (action === 'sidebar') toggleSidebar();
+                if (action === 'fullscreen') toggleFullscreen();
+            });
+        });
+
+        elements.overlay.addEventListener('click', toggleSidebar);
+        $('home-btn').addEventListener('click', goHome);
+        $('eye-btn').addEventListener('click', toggleViewSource);
+        $('upload-btn').addEventListener('click', () => elements.fileInput.click());
+        elements.fileInput.addEventListener('change', handleUpload);
+        $('export-btn').addEventListener('click', exportBundle);
+        $('clear-btn').addEventListener('click', clearAllData);
+        $('copyright').addEventListener('click', showDevModal);
+
+        elements.fileList.addEventListener('click', (e) => {
+            const item = e.target.closest('.file-item');
+            if (!item) return;
+
+            const index = parseInt(item.dataset.index);
+            const action = e.target.dataset.action;
+
+            if (action === 'open') openFile(index);
+            if (action === 'edit') showRenameModal(index);
+            if (action === 'delete') showDeleteModal(index);
+        });
+
+        elements.fileList.addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) handleDragStart(e, parseInt(item.dataset.index));
+        });
+
+        elements.fileList.addEventListener('dragend', handleDragEnd);
+
+        elements.fileList.addEventListener('dragover', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) handleDragOver(e);
+        });
+
+        elements.fileList.addEventListener('dragleave', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) handleDragLeave(e);
+        });
+
+        elements.fileList.addEventListener('drop', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) handleDrop(e, parseInt(item.dataset.index));
+        });
+
+        elements.searchInput.addEventListener('input', debounce(handleSearch, 200));
+
+        $('copy-btn').addEventListener('click', copySource);
+        $('save-btn').addEventListener('click', saveChanges);
+        $('close-viewer-btn').addEventListener('click', () => closeSourceViewer());
+        $('undo-btn').addEventListener('click', undo);
+        $('redo-btn').addEventListener('click', redo);
+        elements.sourceContent.addEventListener('input', handleEditorInput);
+        elements.sourceContent.addEventListener('keydown', handleEditorKeydown);
+        elements.nexusOverlay.addEventListener('click', () => closeSourceViewer());
+
+        $('cancel-delete').addEventListener('click', closeDeleteModal);
+        $('confirm-delete').addEventListener('click', confirmDelete);
+
+        $('cancel-rename').addEventListener('click', closeRenameModal);
+        $('confirm-rename').addEventListener('click', confirmRename);
+        elements.renameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') confirmRename();
+            if (e.key === 'Escape') closeRenameModal();
+        });
+        elements.renameModal.addEventListener('click', (e) => {
+            if (e.target.id === 'rename-modal') closeRenameModal();
+        });
+
+        $('cancel-confirm').addEventListener('click', closeConfirmModal);
+        $('confirm-action').addEventListener('click', executeConfirm);
+        elements.confirmModal.addEventListener('click', (e) => {
+            if (e.target.id === 'confirm-modal') closeConfirmModal();
+        });
+
+        $('dismiss-dev').addEventListener('click', closeDevModal);
+        elements.devModal.addEventListener('click', (e) => {
+            if (e.target === elements.devModal) closeDevModal();
+        });
+
+        elements.themeToggle.addEventListener('click', toggleTheme);
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (elements.renameModal.style.display === 'flex') {
+                    closeRenameModal();
+                } else if (elements.confirmModal.style.display === 'flex') {
+                    closeConfirmModal();
+                } else if (elements.sourceViewer.style.display === 'flex') {
+                    closeSourceViewer();
+                } else if (elements.devModal.style.display === 'flex') {
+                    closeDevModal();
+                } else if (elements.deleteModal.style.display === 'flex') {
+                    closeDeleteModal();
+                }
+            }
+
+            if (e.ctrlKey && e.key === 's') {
+                if (elements.sourceViewer.style.display === 'flex') {
+                    e.preventDefault();
+                    saveChanges();
+                }
+            }
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopAnimation();
+            } else {
+                startAnimation();
+            }
+        });
+
+        window.addEventListener('resize', debounce(initCanvas, 200));
+
+        elements.securityAlert.addEventListener('click', dismissSecurityAlert);
+
+        init();
+
+        // ===== ANDROID BRIDGE DOWNLOAD SYSTEM =====
+        (function() {
+            window.nexusCurrentChildTitle = 'Nexus Export';
+
+            const getFormattedDate = () => {
+                const d = new Date();
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return `${d.getDate()}_${months[d.getMonth()]}_${d.getFullYear()}`;
+            };
+
+            window.downloadToAndroid = function(blobUrl, fallbackName) {
+                if (!blobUrl || !blobUrl.startsWith('blob:')) {
+                    console.warn('[Nexus] Invalid blob URL');
+                    return;
+                }
+
+                if (window.AndroidBridge && AndroidBridge.showToast) {
+                    AndroidBridge.showToast('⚠️ Enter filename with extension (e.g. .html, .pdf)');
+                }
+
+                let rawTitle = window.nexusCurrentChildTitle || fallbackName || 'Nexus_Export';
+                let shortTitle = rawTitle.trim().split(/\s+/).slice(0, 3).join('_');
+                shortTitle = shortTitle.replace(/[^a-zA-Z0-9_]/g, '');
+                let finalName = `${shortTitle}_${getFormattedDate()}`;
+
+                fetch(blobUrl)
+                    .then(res => res.blob())
+                    .then(blob => {
+                        const reader = new FileReader();
+                        reader.onloadend = function() {
+                            const base64data = reader.result.split(',')[1];
+                            if (window.AndroidBridge && AndroidBridge.sendToAndroid) {
+                                AndroidBridge.sendToAndroid(base64data, finalName);
+                            } else {
+                                const a = document.createElement('a');
+                                a.href = blobUrl;
+                                a.download = finalName + '.html';
+                                a.click();
+                            }
+                        };
+                        reader.readAsDataURL(blob);
+                    })
+                    .catch(err => {
+                        console.error('[Nexus] Download error:', err);
+                        showToast('DOWNLOAD FAILED');
+                    });
+            };
+
+            const setupInterceptor = (targetDoc, isChild = false) => {
+                if (!targetDoc) return;
+
+                if (isChild && targetDoc.title) {
+                    window.nexusCurrentChildTitle = targetDoc.title;
+                }
+
+                targetDoc.addEventListener('click', function(e) {
+                    const target = e.target.closest('a[download]');
+                    if (target && target.href && target.href.startsWith('blob:')) {
+                        e.preventDefault();
+                        if (isChild && targetDoc.title) {
+                            window.nexusCurrentChildTitle = targetDoc.title;
+                        }
+                        window.downloadToAndroid(target.href, target.download);
+                    }
+                }, true);
+            };
+
+            setupInterceptor(document);
+
+            let iframeWatcher = null;
+
+            function startIframeWatcher() {
+                if (iframeWatcher) return;
+
+                iframeWatcher = setInterval(() => {
+                    try {
+                        const iframe = document.getElementById('view');
+                        if (iframe && iframe.contentWindow) {
+                            const childDoc = iframe.contentWindow.document;
+                            if (childDoc && !childDoc._nexusHooked) {
+                                setupInterceptor(childDoc, true);
+                                childDoc._nexusHooked = true;
+                            }
+                        }
+                    } catch (e) {
+                        // Cross-origin blocked
+                    }
+                }, 1500);
+            }
+
+            function stopIframeWatcher() {
+                if (iframeWatcher) {
+                    clearInterval(iframeWatcher);
+                    iframeWatcher = null;
+                }
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    stopIframeWatcher();
+                } else {
+                    startIframeWatcher();
+                }
+            });
+
+            startIframeWatcher();
+        })();
+
+    })();
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => {
+          console.log('[Nexus] SW Registered!', reg.scope);
+          
+          // Cek update manual jika diperlukan
+          reg.onupdatefound = () => {
+            const installingWorker = reg.installing;
+            installingWorker.onstatechange = () => {
+              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                console.log('[Nexus] Konten baru tersedia, silakan refresh.');
+              }
+            };
+          };
+        })
+        .catch(err => console.log('[Nexus] SW Registration Failed:', err));
+    });
+  }
+    </script>
+</body>
+</html>
