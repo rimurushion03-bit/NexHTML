@@ -2803,7 +2803,56 @@ function handleDrop(e, targetIndex) {
 
         init();
 
-        // ===== ANDROID BRIDGE DOWNLOAD SYSTEM =====
+        // ===== ANDROID BACK BUTTON HANDLER =====
+        // Pakai History API: push state saat file dibuka,
+        // tangkap popstate (tombol back Android) untuk goHome().
+        (function() {
+            // Push state awal agar ada history entry yang bisa di-pop
+            history.replaceState({ nexus: 'home' }, '');
+
+            // Setiap kali file dibuka, push state baru ke history
+            const _origOpenFile = openFile;
+            window.openFile = function(index) {
+                _origOpenFile(index);
+                // Hanya push jika belum ada state file yang aktif
+                if (!history.state || history.state.nexus !== 'file') {
+                    history.pushState({ nexus: 'file' }, '');
+                }
+            };
+
+            // Setiap kali goHome dipanggil (dari manapun), pastikan history bersih
+            const _origGoHome = goHome;
+            window.goHome = function() {
+                _origGoHome();
+                // Kalau state saat ini adalah 'file', go back supaya sinkron
+                if (history.state && history.state.nexus === 'file') {
+                    history.back();
+                }
+            };
+
+            // Tangkap tombol back Android (popstate)
+            window.addEventListener('popstate', function(e) {
+                const state = e.state;
+
+                // Jika sidebar sedang terbuka → tutup sidebar dulu
+                if (elements.sidebar.classList.contains('active')) {
+                    toggleSidebar();
+                    // Push ulang agar back berikutnya masih bisa ditangkap
+                    history.pushState({ nexus: 'file' }, '');
+                    return;
+                }
+
+                // Jika sedang menampilkan file → kembali ke home
+                if (currentFileIndex !== -1) {
+                    _origGoHome();
+                    return;
+                }
+
+                // Jika sudah di home → biarkan Android menutup app secara natural
+            });
+        })();
+
+
         (function() {
             window.nexusCurrentChildTitle = 'Nexus Export';
 
