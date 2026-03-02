@@ -1984,50 +1984,127 @@
             saveData();
         }
 
+        // ===== CSS-FIRST RENDERING =====
+        // Pisahkan <style>, <link rel="stylesheet">, dan <script> dari HTML asli.
+        // Fase 1 → render HTML + CSS saja (tampilan langsung muncul).
+        // Fase 2 → inject script setelah iframe selesai paint pertama.
+        function parseCSSFirst(htmlString) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlString, 'text/html');
+
+            // Kumpulkan semua <script> lalu HAPUS dari dokumen sementara
+            const scripts = [];
+            doc.querySelectorAll('script').forEach(el => {
+                scripts.push({
+                    src:  el.getAttribute('src') || '',
+                    type: el.getAttribute('type') || 'text/javascript',
+                    code: el.innerHTML
+                });
+                el.remove();
+            });
+
+            // Serialisasi HTML tanpa script (CSS tetap ada di <style> / <link>)
+            const htmlNoScript = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML;
+
+            return { htmlNoScript, scripts };
+        }
+
+        function injectScriptsIntoIframe(iframeEl, scripts) {
+            if (!scripts || scripts.length === 0) return;
+
+            const iframeDoc = iframeEl.contentDocument || iframeEl.contentWindow.document;
+
+            scripts.forEach(s => {
+                const tag = iframeDoc.createElement('script');
+                if (s.type) tag.type = s.type;
+
+                if (s.src) {
+                    // External script — inject via src, tunggu load sebelum lanjut
+                    tag.src = s.src;
+                } else {
+                    // Inline script — langsung tulis kodenya
+                    tag.textContent = s.code;
+                }
+
+                iframeDoc.body.appendChild(tag);
+            });
+        }
+
         function openFile(index) {
             const f = dataFiles[index];
             if (!f) return;
 
             currentFileIndex = index;
-            
+
             try {
+                // --- Gambar: tidak perlu CSS-first, langsung render ---
+                if (f.t && f.t.startsWith('image/')) {
+                    const htmlContent = `<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <style>
+        body { margin:0; display:flex; justify-content:center; align-items:center; background:#0a0a0a; min-height:100vh; }
+        img  { max-width:100%; height:auto; }
+    </style>
+</head>
+<body><img src="data:${f.t};base64,${f.c}" alt="${f.n}"></body>
+</html>`;
+                    const blob = new Blob([htmlContent], { type: 'text/html' });
+                    if (elements.view.src) URL.revokeObjectURL(elements.view.src);
+                    elements.view.src = URL.createObjectURL(blob);
+                    elements.modeText.textContent = f.n;
+                    elements.welcome.style.display = 'none';
+                    elements.view.style.display = 'block';
+                    if (elements.sidebar.classList.contains('active')) toggleSidebar();
+                    return;
+                }
+
+                // --- HTML / teks biasa: terapkan CSS-first rendering ---
                 const bin = atob(f.c);
                 const arr = new Uint8Array(bin.length);
-                for (let j = 0; j < bin.length; j++) {
-                    arr[j] = bin.charCodeAt(j);
-                }
+                for (let j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
 
-                let blob;
-                if (f.t && f.t.startsWith('image/')) {
-                    const htmlContent = `
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-                            <style>
-                                body { margin:0; display:flex; justify-content:center; align-items:center; background:#0a0a0a; min-height:100vh; }
-                                img { max-width:100%; height:auto; }
-                            </style>
-                        </head>
-                        <body><img src="data:${f.t};base64,${f.c}" alt="${f.n}"></body>
-                        </html>`;
-                    blob = new Blob([htmlContent], { type: 'text/html' });
+                const rawHTML   = new TextDecoder().decode(arr);
+                const isHTML    = (f.t || '').includes('html') || f.n.match(/\.html?$/i);
+
+                let blobURL;
+
+                if (isHTML) {
+                    // Fase 1: render HTML + CSS dulu (tanpa script)
+                    const { htmlNoScript, scripts } = parseCSSFirst(rawHTML);
+                    const phase1Blob = new Blob([htmlNoScript], { type: 'text/html' });
+
+                    if (elements.view.src) URL.revokeObjectURL(elements.view.src);
+                    blobURL = URL.createObjectURL(phase1Blob);
+                    elements.view.src = blobURL;
+
+                    // Fase 2: setelah iframe selesai render CSS, baru inject scripts
+                    elements.view.onload = function() {
+                        elements.view.onload = null; // one-shot
+                        try {
+                            injectScriptsIntoIframe(elements.view, scripts);
+                        } catch(err) {
+                            // Cross-origin atau sandbox — fallback ke render penuh
+                            console.warn('[Nexus] Script inject blocked, fallback:', err);
+                            const fallbackBlob = new Blob([rawHTML], { type: 'text/html' });
+                            elements.view.src = URL.createObjectURL(fallbackBlob);
+                            URL.revokeObjectURL(blobURL);
+                        }
+                    };
                 } else {
-                    blob = new Blob([arr], { type: f.t || 'text/html' });
+                    // Bukan HTML (misal .txt) — render langsung seperti semula
+                    const blob = new Blob([arr], { type: f.t || 'text/plain' });
+                    if (elements.view.src) URL.revokeObjectURL(elements.view.src);
+                    elements.view.src = URL.createObjectURL(blob);
                 }
 
-                if (elements.view.src) {
-                    URL.revokeObjectURL(elements.view.src);
-                }
-
-                elements.view.src = URL.createObjectURL(blob);
                 elements.modeText.textContent = f.n;
                 elements.welcome.style.display = 'none';
                 elements.view.style.display = 'block';
 
-                if (elements.sidebar.classList.contains('active')) {
-                    toggleSidebar();
-                }
+                if (elements.sidebar.classList.contains('active')) toggleSidebar();
+
             } catch (e) {
                 showToast('FAILED TO OPEN FILE');
                 console.error('Open file error:', e);
